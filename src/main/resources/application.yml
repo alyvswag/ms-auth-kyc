@@ -7,7 +7,7 @@ spring:
         registration:
           pin-client:
             client-id: pin-client
-            client-secret: ${CLIENT_SECRET_KEYCLOAK}
+            client-secret: OD0VLNmXPKfpL0sQOPfplRGumtlp3KzUmWh1C17nwFieWenDCwXmnriyExDW2WDOoe3jo17yxX8tyRL10U4VU2
             authorization-grant-type: authorization_code
             redirect-uri: "http://192.168.0.196:8020/auth/login/oauth2/code/pin-client"
             scope:
@@ -28,7 +28,7 @@ management:
         include: health,info
 
 server:
-  port: 8081
+  port: 0
 
 eureka:
   client:
