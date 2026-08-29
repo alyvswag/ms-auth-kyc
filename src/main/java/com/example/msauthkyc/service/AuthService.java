@@ -3,13 +3,25 @@ package com.example.msauthkyc.service;
 import com.example.msauthkyc.client.MsAccountClient;
 import com.example.msauthkyc.client.model.CreateAccountRequest;
 import com.example.msauthkyc.client.model.CreateAccountResponse;
+import com.example.msauthkyc.exception.InvalidRefreshTokenException;
+import com.example.msauthkyc.exception.MissingRefreshTokenException;
+import com.example.msauthkyc.model.KeycloakTokenResponse;
 import com.example.msauthkyc.model.LoginResponse;
+import com.example.msauthkyc.model.TokenResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +31,16 @@ public class AuthService {
 
     private final MsAccountClient msAccountClient;
     private final OAuth2AuthorizedClientService authorizedClientService;
+    private final RestTemplate restTemplate;
+
+    @Value("${spring.security.oauth2.client.registration.pin-client.client-id}")
+    private String clientId;
+
+    @Value("${spring.security.oauth2.client.registration.pin-client.client-secret}")
+    private String clientSecret;
+
+    @Value("${spring.security.oauth2.client.provider.keycloak.issuer-uri}")
+    private String issuerUri;
 
     public LoginResponse handleLogin(OidcUser oidcUser, Authentication authentication) {
         OAuth2AuthorizedClient authorizedClient = loadAuthorizedClient(authentication);
@@ -36,6 +58,37 @@ public class AuthService {
                 .pictureUrl(pictureUrl)
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .build();
+    }
+
+    public TokenResponse refreshToken(String refreshToken) {
+        validateRefreshToken(refreshToken);
+
+        MultiValueMap<String, String> form = buildRefreshForm(refreshToken);
+        HttpEntity<MultiValueMap<String, String>> requestEntity = buildRequestEntity(form);
+
+        try {
+            KeycloakTokenResponse keycloakResponse = restTemplate.postForObject(
+                    tokenEndpoint(),
+                    requestEntity,
+                    KeycloakTokenResponse.class
+            );
+
+            if (keycloakResponse == null) {
+                throw new InvalidRefreshTokenException("Keycloak-dan boş cavab gəldi", null);
+            }
+
+            return toTokenResponse(keycloakResponse);
+
+        } catch (HttpClientErrorException.BadRequest | HttpClientErrorException.Unauthorized e) {
+            throw new InvalidRefreshTokenException("Refresh token etibarsızdır və ya vaxtı bitib", e);
+        }
+    }
+
+    private TokenResponse toTokenResponse(KeycloakTokenResponse keycloakResponse) {
+        return TokenResponse.builder()
+                .accessToken(keycloakResponse.getAccessToken())
+                .refreshToken(keycloakResponse.getRefreshToken())
                 .build();
     }
 
@@ -59,4 +112,30 @@ public class AuthService {
 
         return msAccountClient.createAccount(request);
     }
+
+    private MultiValueMap<String, String> buildRefreshForm(String refreshToken) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "refresh_token");
+        form.add("client_id", clientId);
+        form.add("client_secret", clientSecret);
+        form.add("refresh_token", refreshToken);
+        return form;
+    }
+
+    private HttpEntity<MultiValueMap<String, String>> buildRequestEntity(MultiValueMap<String, String> form) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        return new HttpEntity<>(form, headers);
+    }
+
+    private String tokenEndpoint() {
+        return issuerUri + "/protocol/openid-connect/token";
+    }
+
+    private void validateRefreshToken(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new MissingRefreshTokenException("Refresh token boş ola bilməz");
+        }
+    }
+
 }
