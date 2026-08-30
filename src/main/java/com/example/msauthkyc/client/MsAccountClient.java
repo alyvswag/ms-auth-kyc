@@ -9,6 +9,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 @FeignClient(name = "ms-account", primary = false)
 public interface MsAccountClient {
 
-    @PostMapping("/createAccount")
+    @PostMapping
     CreateAccountResponse createAccount(@RequestBody CreateAccountRequest request);
 }
