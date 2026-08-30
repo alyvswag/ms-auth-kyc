@@ -1,10 +1,8 @@
 package com.example.msauthkyc.service;
 
-import com.example.msauthkyc.client.MsAccountClient;
-import com.example.msauthkyc.client.model.CreateAccountRequest;
 import com.example.msauthkyc.client.model.CreateAccountResponse;
 import com.example.msauthkyc.exception.InvalidRefreshTokenException;
-import com.example.msauthkyc.exception.MissingRefreshTokenException;
+import com.example.msauthkyc.mapper.TokenMapper;
 import com.example.msauthkyc.model.KeycloakTokenResponse;
 import com.example.msauthkyc.model.LoginResponse;
 import com.example.msauthkyc.model.TokenResponse;
@@ -23,15 +21,21 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import static com.example.msauthkyc.util.TokenUtil.validateRefreshToken;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private static final String REGISTRATION_ID = "pin-client";
+    private static final String REFRESH_TOKEN = "refresh_token";
+    private static final String TOKEN_ENDPOINT_PATH = "/protocol/openid-connect/token";
 
-    private final MsAccountClient msAccountClient;
+    private final AccountService accountService;
     private final OAuth2AuthorizedClientService authorizedClientService;
     private final RestTemplate restTemplate;
+
+    private final TokenMapper tokenMapper;
 
     @Value("${spring.security.oauth2.client.registration.pin-client.client-id}")
     private String clientId;
@@ -49,7 +53,7 @@ public class AuthService {
         String refreshToken = extractRefreshToken(authorizedClient);
         String pictureUrl = oidcUser.getPicture();
 
-        CreateAccountResponse accountResponse = createAccount(oidcUser);
+        CreateAccountResponse accountResponse = accountService.createAccount(oidcUser);
 
         return LoginResponse.builder()
                 .accountId(accountResponse.getAccountId())
@@ -78,23 +82,16 @@ public class AuthService {
                 throw new InvalidRefreshTokenException("Keycloak-dan boş cavab gəldi", null);
             }
 
-            return toTokenResponse(keycloakResponse);
+            return tokenMapper.toTokenResponse(keycloakResponse);
 
         } catch (HttpClientErrorException.BadRequest | HttpClientErrorException.Unauthorized e) {
             throw new InvalidRefreshTokenException("Refresh token etibarsızdır və ya vaxtı bitib", e);
         }
     }
 
-    private TokenResponse toTokenResponse(KeycloakTokenResponse keycloakResponse) {
-        return TokenResponse.builder()
-                .accessToken(keycloakResponse.getAccessToken())
-                .refreshToken(keycloakResponse.getRefreshToken())
-                .build();
-    }
-
     private OAuth2AuthorizedClient loadAuthorizedClient(Authentication authentication) {
         return authorizedClientService.loadAuthorizedClient(REGISTRATION_ID, authentication.getName());
-    }
+    } // cari istifadecini getiriri //todo: arasdirma et
 
     private String extractRefreshToken(OAuth2AuthorizedClient authorizedClient) {
         return authorizedClient.getRefreshToken() != null
@@ -102,20 +99,9 @@ public class AuthService {
                 : null;
     }
 
-    private CreateAccountResponse createAccount(OidcUser oidcUser) {
-        CreateAccountRequest request = CreateAccountRequest.builder()
-                .externalId(oidcUser.getSubject())
-                .email(oidcUser.getEmail())
-                .fullName(oidcUser.getFullName())
-                .pictureUrl(oidcUser.getPicture())
-                .build();
-
-        return msAccountClient.createAccount(request);
-    }
-
     private MultiValueMap<String, String> buildRefreshForm(String refreshToken) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "refresh_token");
+        form.add("grant_type", REFRESH_TOKEN);
         form.add("client_id", clientId);
         form.add("client_secret", clientSecret);
         form.add("refresh_token", refreshToken);
@@ -126,16 +112,11 @@ public class AuthService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         return new HttpEntity<>(form, headers);
+        // form data-nı düzgün Content-Type header-i ilə HTTP sorğusu üçün "paketləyir"
     }
 
     private String tokenEndpoint() {
-        return issuerUri + "/protocol/openid-connect/token";
-    }
-
-    private void validateRefreshToken(String refreshToken) {
-        if (refreshToken == null || refreshToken.isBlank()) {
-            throw new MissingRefreshTokenException("Refresh token boş ola bilməz");
-        }
+        return issuerUri + TOKEN_ENDPOINT_PATH;
     }
 
 }

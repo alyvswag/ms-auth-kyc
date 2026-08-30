@@ -21,4 +21,5 @@ public class GlobalExceptionHandler {
         log.warn("Etibarsız refresh token: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
+    //todo: exceptionlara el gezdir
 }
