@@ -1,15 +1,19 @@
 spring:
   application:
     name: ms-auth-kyc
+  profiles:
+    active: mock
+  config:
+    import: "classpath:application-vault.yml,vault://"
   security:
     oauth2:
       client:
         registration:
           pin-client:
-            client-id: pin-client
-            client-secret: OD0VLNmXPKfpL0sQOPfplRGumtlp3KzUmWh1C17nwFieWenDCwXmnriyExDW2WDOoe3jo17yxX8tyRL10U4VU2
-            authorization-grant-type: authorization_code
-            redirect-uri: "http://192.168.0.196:8020/auth/login/oauth2/code/pin-client"
+            client-id: ${client-id}
+            client-secret: ${client-secret}
+            authorization-grant-type: ${grant-type}
+            redirect-uri: ${redirect-uri}
             scope:
               - openid
               - profile
@@ -17,9 +21,7 @@ spring:
             provider: keycloak
         provider:
           keycloak:
-            issuer-uri: http://localhost:8080/realms/pin-realm
-  profiles:
-    active: mock
+            issuer-uri: ${issuer-uri}
 
 management:
   endpoints:
@@ -32,9 +34,8 @@ server:
 
 eureka:
   instance:
-    hostname: 192.168.0.196
+    hostname: 192.168.0.195
     prefer-ip-address: true
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
-
+      defaultZone: ${eureka-server}

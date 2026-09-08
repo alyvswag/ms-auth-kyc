@@ -31,6 +31,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    implementation 'org.springframework.cloud:spring-cloud-starter-vault-config'
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
 
     compileOnly 'org.projectlombok:lombok'
